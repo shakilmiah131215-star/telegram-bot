@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 import threading
@@ -16,14 +17,31 @@ PROFILE_NAME = "Ripon Khan"
 PROFILE_USERNAME = "millions_b"
 PROFILE_PHOTO_URL = "https://i.imgur.com/YourProfilePic.jpg"
 
-# অ্যাডমিন ও লিড স্টোরেজ
+# অ্যাডমিন ও পার্মানেন্ট ফাইল স্টোরেজ
 active_admins = set()
-inbox_leads = {}
+LEAD_FILE = "leads.json"
 
-# টার্গেটেড কিউওয়ার্ড লিস্ট (যাতে আগে বা পরে 'need' থাকলেও ধরে)
+# লিড ফাইল লোড করার ফাংশন
+def load_leads():
+    if os.path.exists(LEAD_FILE):
+        try:
+            with open(LEAD_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+# লিড ফাইল সেভ করার ফাংশন
+def save_leads(leads):
+    try:
+        with open(LEAD_FILE, "w", encoding="utf-8") as f:
+            json.dump(leads, f, ensure_ascii=False, indent=4)
+    except Exception as e:
+        print(f"Error saving leads: {e}")
+
+# টার্গেটেড কিউওয়ার্ড লিস্ট (আগে বা পরে 'need' থাকলেই ধরবে)
 TARGET_KEYWORDS = ["pc clone id need", "1000sirs id need", "61x id need", "need"]
 
-# গ্রুপ ও চ্যানেল লিস্ট (যেখানে ইউজাররা ক্লিক করে সরাসরি জয়েন করতে পারবে)
 GROUP_LINKS = [
     ("🦋 BOOST THE LION 🦁", "https://t.me/your_group_1"),
     ("A.S.M.R WORKING", "https://t.me/your_group_2"),
@@ -35,7 +53,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Stealth Advanced CRM Bot is Active!"
+    return "Stealth CRM Bot with Persistent Storage is Active!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -51,23 +69,25 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip() if update.message.text else ""
     text_lower = text.lower()
 
-    # --- ১. গ্রুপে স্মার্ট কিউওয়ার্ড ট্র্যাকিং (আগে বা পরে 'need' থাকলেই ধরবে) ---
+    # বর্তমান লিড ডেটা ফাইল থেকে লোড করা
+    inbox_leads = load_leads()
+
+    # --- ১. গ্রুপে স্মার্ট কিউওয়ার্ড ট্র্যাকিং ---
     if chat_type in ["group", "supergroup"]:
-        # চেক করা যে মেসেজের ভেতরে কিউওয়ার্ড বা 'need' শব্দ আছে কি না
         is_matched = any(kw in text_lower for kw in TARGET_KEYWORDS)
 
         if is_matched:
-            inbox_leads[user.id] = {
+            inbox_leads[str(user.id)] = {
                 "name": user.full_name,
                 "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
                 "last_msg": text,
                 "source": f"Group ({update.message.chat.title})"
             }
+            save_leads(inbox_leads)  # সাথে সাথে ফাইলে সেভ হবে
         return
 
     # --- ২. ইনবক্সে কাজ (Private Chat) ---
     if chat_type == "private":
-        # সিক্রেট অ্যাডমিন পাসওয়ার্ড চেক
         if text == SECRET_TRIGGER:
             active_admins.add(user.id)
             
@@ -90,13 +110,14 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user.id in active_admins:
             return
 
-        # ইনবক্সে সাধারণ ভিজিটর মেসেজ দিলে নোট করা
-        inbox_leads[user.id] = {
+        # ইনবক্সে মেসেজ দিলে ফাইলে নোট সেভ করা
+        inbox_leads[str(user.id)] = {
             "name": user.full_name,
             "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
             "last_msg": text if text else "মিডিয়া/ফাইল",
             "source": "Direct Inbox"
         }
+        save_leads(inbox_leads)
 
         # ফেক প্রোফাইল ভিউ
         profile_keyboard = [
@@ -133,9 +154,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
+    inbox_leads = load_leads()
 
     if query.data == "visitor_groups":
-        # ইউজারদের জন্য গ্রুপ লিস্ট ও ইনস্ট্যান্ট জয়েন বাটন
         group_keyboard = [[InlineKeyboardButton(text, url=link)] for text, link in GROUP_LINKS]
         group_keyboard.append([InlineKeyboardButton("🔙 ফিরে যান", callback_data="back_profile")])
         await query.edit_message_caption(
@@ -204,7 +225,7 @@ def main():
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_incoming))
 
-    print("Advanced Stealth CRM Bot is running...")
+    print("Persistent Stealth CRM Bot is running...")
     application.run_polling()
 
 if __name__ == "__main__":
