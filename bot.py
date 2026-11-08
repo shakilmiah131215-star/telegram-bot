@@ -12,10 +12,11 @@ logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s
 SECRET_TRIGGER = "#admin_unlock_99"
 
 # 👤 আপনার ফেক প্রোফাইলের তথ্য
-PROFILE_NAME = "Eafat Khan"
-PROFILE_USERNAME = "millions_b"
+PROFILE_NAME = "Ripon Miah"
+PROFILE_USERNAME = "SleepAutoReplyBot"
 PROFILE_PHOTO_URL = "https://i.imgur.com/YourProfilePic.jpg"
 
+# অ্যাডমিন ও লিড স্টোরেজ
 active_admins = set()
 inbox_leads = {}
 
@@ -36,7 +37,7 @@ def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
-# টেলিগ্রাম মেসেজ হ্যান্ডলার
+# টেলিগ্রাম ইনকামিং মেসেজ হ্যান্ডলার
 async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
         return
@@ -48,7 +49,7 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if chat_type != "private":
         return
 
-    # সঠিক সিক্রেট কোড দিলে অ্যাডমিন প্যানেল ওপেন হবে
+    # ১. সঠিক সিক্রেট কোড দিলে অ্যাডমিন প্যানেল ও বাটনগুলো শো করবে
     if text == SECRET_TRIGGER:
         active_admins.add(user.id)
         
@@ -62,16 +63,17 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             f"🔓 **পাসওয়ার্ড সঠিক! সিক্রেট কন্ট্রোল প্যানেল আনলক করা হয়েছে।**\n\n"
             f"📥 মোট সংগৃহীত লিড: `{len(inbox_leads)} জন`\n"
-            f"আপনি এখন এই অ্যাকাউন্ট থেকে বট নিয়ন্ত্রণ করতে পারবেন:",
+            f"নিচের অপশনগুলো ব্যবহার করুন:",
             reply_markup=reply_markup,
             parse_mode="Markdown"
         )
         return
 
+    # যদি ইউজার ইতিমধ্যে অ্যাডমিন মোডে থাকে
     if user.id in active_admins:
         return
 
-    # সাধারণ ভিজিটর মেসেজ দিলে নোট করা ও প্রোফাইল দেখানো
+    # ২. সাধারণ ভিজিটর মেসেজ দিলে নোট করা ও ফেক প্রোফাইল দেখানো
     inbox_leads[user.id] = {
         "name": user.full_name,
         "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
@@ -90,7 +92,7 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"📢 **Channel:** FACABOOK OLD ID SELL\n"
         f"📌 Pc clone id sell\n\n"
         f"🔗 **Username:** `@{PROFILE_USERNAME}`\n\n"
-        f"👇 গ্রুপগুলোতে যুক্ত হতে নিচে ক্লিক করুন:"
+        f"👇 আমাদের গ্রুপগুলোতে যুক্ত হতে নিচে ক্লিক করুন:"
     )
 
     try:
@@ -107,6 +109,7 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown"
         )
 
+# বাটন হ্যান্ডলার (ক্লিক করলে কী কাজ করবে)
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
@@ -154,12 +157,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif query.data == "admin_logout":
             active_admins.remove(user_id)
-            await query.edit_message_text(text="🔒 এই অ্যাকাউন্টের জন্য অ্যাডমিন মোড লক করা হয়েছে।")
+            await query.edit_message_text(text="🔒 এই অ্যাকাউন্টের জন্য অ্যাডমিন মোড লক করা হয়েছে। আবার প্যানেল খুলতে সিক্রেট কোড দিন।")
 
 def main():
     TOKEN = "9271289264:AAEIJCiBo4L4xzBWFNTj1VtAA2sA0r8L3BM"
     
-    # ব্যাকগ্রাউন্ডে ফ্লাস্ক সার্ভার রান করা যাতে রেন্ডার ওয়েব সার্ভিস টাইমআউট না হয়
+    # ব্যাকগ্রাউন্ডে ফ্লাস্ক সার্ভার চালু রাখা
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
