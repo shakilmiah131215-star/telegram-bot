@@ -21,7 +21,6 @@ PROFILE_PHOTO_URL = "https://i.imgur.com/YourProfilePic.jpg"
 active_admins = set()
 LEAD_FILE = "leads.json"
 
-# লিড ফাইল লোড করার ফাংশন
 def load_leads():
     if os.path.exists(LEAD_FILE):
         try:
@@ -31,7 +30,6 @@ def load_leads():
             return {}
     return {}
 
-# লিড ফাইল সেভ করার ফাংশন
 def save_leads(leads):
     try:
         with open(LEAD_FILE, "w", encoding="utf-8") as f:
@@ -39,8 +37,16 @@ def save_leads(leads):
     except Exception as e:
         print(f"Error saving leads: {e}")
 
-# টার্গেটেড কিউওয়ার্ড লিস্ট (আগে বা পরে 'need' থাকলেই ধরবে)
-TARGET_KEYWORDS = ["pc clone id need", "1000sirs id need", "61x id need", "need"]
+# আপনার দেওয়া নতুন ও সমস্ত সুনির্দিষ্ট কিওয়ার্ড লিস্ট
+TARGET_KEYWORDS = [
+    "pc clone id need", 
+    "pc, ", 
+    "61x", 
+    "1000x", 
+    "1000xx", 
+    "1000X", 
+    "need"
+]
 
 GROUP_LINKS = [
     ("🦋 BOOST THE LION 🦁", "https://t.me/your_group_1"),
@@ -53,7 +59,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Stealth CRM Bot with Persistent Storage is Active!"
+    return "Advanced Keyword CRM Bot is Active!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
@@ -69,21 +75,28 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.strip() if update.message.text else ""
     text_lower = text.lower()
 
-    # বর্তমান লিড ডেটা ফাইল থেকে লোড করা
     inbox_leads = load_leads()
 
-    # --- ১. গ্রুপে স্মার্ট কিউওয়ার্ড ট্র্যাকিং ---
+    # --- ১. গ্রুপে স্মার্ট কিওয়ার্ড ট্র্যাকিং ---
     if chat_type in ["group", "supergroup"]:
-        is_matched = any(kw in text_lower for kw in TARGET_KEYWORDS)
+        matched_keyword = "সাধারণ কিওয়ার্ড"
+        is_matched = False
+
+        for kw in TARGET_KEYWORDS:
+            if kw.lower() in text_lower:
+                is_matched = True
+                matched_keyword = kw.upper()
+                break
 
         if is_matched:
             inbox_leads[str(user.id)] = {
                 "name": user.full_name,
                 "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
                 "last_msg": text,
+                "keyword": matched_keyword,
                 "source": f"Group ({update.message.chat.title})"
             }
-            save_leads(inbox_leads)  # সাথে সাথে ফাইলে সেভ হবে
+            save_leads(inbox_leads)
         return
 
     # --- ২. ইনবক্সে কাজ (Private Chat) ---
@@ -110,11 +123,12 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if user.id in active_admins:
             return
 
-        # ইনবক্সে মেসেজ দিলে ফাইলে নোট সেভ করা
+        # ইনবক্সে মেসেজ দিলে ট্যাগসহ সেভ করা
         inbox_leads[str(user.id)] = {
             "name": user.full_name,
             "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
             "last_msg": text if text else "মিডিয়া/ফাইল",
+            "keyword": "Direct Inbox",
             "source": "Direct Inbox"
         }
         save_leads(inbox_leads)
@@ -186,7 +200,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 empty_box_text = (
                     "📊 **ইনবক্স ও গ্রুপ লিড নোট বক্স:**\n\n"
                     "📭 **ফাঁকা ঘর:** বর্তমানে কোনো নতুন লিড বা কাস্টমার জমা হয়নি।\n"
-                    "_গ্রুপ বা ইনবক্সে কিউওয়ার্ড বা 'need' যুক্ত মেসেজ আসলে এখানে দেখাবে।_"
+                    "_গ্রুপ বা ইনবক্সে কিওয়ার্ড বা 'need' যুক্ত মেসেজ আসলে এখানে দেখাবে।_"
                 )
                 await query.edit_message_text(text=empty_box_text, parse_mode="Markdown")
                 return
@@ -195,9 +209,11 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             for idx, (uid, data) in enumerate(inbox_leads.items(), 1):
                 clean_username = data['username'].replace('@', '')
                 chat_link = f"t.me/{clean_username}" if data['username'] != "ইউজারনেম নেই" else "ইউজারনেম নেই"
+                kw_tag = data.get('keyword', 'General')
                 
                 list_text += (
                     f"{idx}. **{data['name']}** ({data['username']})\n"
+                    f"   🏷️ কিওয়ার্ড ট্যাগ: `{kw_tag}`\n"
                     f"   💬 মেসেজ: _{data['last_msg']}_\n"
                     f"   📍 উৎস: `{data['source']}`\n"
                     f"   🔗 চ্যাট লিংক: {chat_link}\n\n"
@@ -225,7 +241,7 @@ def main():
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_incoming))
 
-    print("Persistent Stealth CRM Bot is running...")
+    print("Keyword Tagged CRM Bot is running...")
     application.run_polling()
 
 if __name__ == "__main__":
