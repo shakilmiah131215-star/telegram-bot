@@ -8,36 +8,40 @@ from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandle
 # লগিং কনফিগারেশন
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-# 🔑 আপনার নির্দিষ্ট সিক্রেট মাস্টার পাসওয়ার্ড
+# 🔑 সিক্রেট মাস্টার পাসওয়ার্ড
 SECRET_TRIGGER = "#admin_unlock_99"
 
-# 👤 আপনার ফেক প্রোফাইলের তথ্য
-PROFILE_NAME = "Ripon Miah"
-PROFILE_USERNAME = "SleepAutoReplyBot"
+# 👤 প্রোফাইলের তথ্য
+PROFILE_NAME = "Ripon Khan"
+PROFILE_USERNAME = "millions_b"
 PROFILE_PHOTO_URL = "https://i.imgur.com/YourProfilePic.jpg"
 
 # অ্যাডমিন ও লিড স্টোরেজ
 active_admins = set()
 inbox_leads = {}
 
+# টার্গেটেড কিউওয়ার্ড লিস্ট (যাতে আগে বা পরে 'need' থাকলেও ধরে)
+TARGET_KEYWORDS = ["pc clone id need", "1000sirs id need", "61x id need", "need"]
+
+# গ্রুপ ও চ্যানেল লিস্ট (যেখানে ইউজাররা ক্লিক করে সরাসরি জয়েন করতে পারবে)
 GROUP_LINKS = [
     ("🦋 BOOST THE LION 🦁", "https://t.me/your_group_1"),
     ("A.S.M.R WORKING", "https://t.me/your_group_2"),
     ("Facebook Update Method", "https://t.me/your_group_3")
 ]
 
-# --- ছোট ফ্লাস্ক সার্ভার (রেন্ডারের Web Service "Timed Out" সমস্যা সমাধানের জন্য) ---
+# রেন্ডার সার্ভার টিক রাখার জন্য ফ্লাস্ক
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Stealth Bot is Active & Running!"
+    return "Stealth Advanced CRM Bot is Active!"
 
 def run_flask():
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
 
-# টেলিগ্রাম ইনকামিং মেসেজ হ্যান্ডলার
+# মেসেজ হ্যান্ডলার (ইনবক্স ও গ্রুপ ট্র্যাকিং)
 async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.from_user:
         return
@@ -45,93 +49,109 @@ async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.message.from_user
     chat_type = update.message.chat.type
     text = update.message.text.strip() if update.message.text else ""
+    text_lower = text.lower()
 
-    if chat_type != "private":
+    # --- ১. গ্রুপে স্মার্ট কিউওয়ার্ড ট্র্যাকিং (আগে বা পরে 'need' থাকলেই ধরবে) ---
+    if chat_type in ["group", "supergroup"]:
+        # চেক করা যে মেসেজের ভেতরে কিউওয়ার্ড বা 'need' শব্দ আছে কি না
+        is_matched = any(kw in text_lower for kw in TARGET_KEYWORDS)
+
+        if is_matched:
+            inbox_leads[user.id] = {
+                "name": user.full_name,
+                "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
+                "last_msg": text,
+                "source": f"Group ({update.message.chat.title})"
+            }
         return
 
-    # ১. সঠিক সিক্রেট কোড দিলে অ্যাডমিন প্যানেল ও বাটনগুলো শো করবে
-    if text == SECRET_TRIGGER:
-        active_admins.add(user.id)
-        
-        keyboard = [
-            [InlineKeyboardButton("📊 ইনবক্স লিড ও নোট বক্স", callback_data="show_leads")],
-            [InlineKeyboardButton("🔗 গ্রুপ লিংক ম্যানেজমেন্ট", callback_data="show_groups")],
-            [InlineKeyboardButton("🔒 অ্যাডমিন মোড বন্ধ করুন (Lock)", callback_data="admin_logout")]
+    # --- ২. ইনবক্সে কাজ (Private Chat) ---
+    if chat_type == "private":
+        # সিক্রেট অ্যাডমিন পাসওয়ার্ড চেক
+        if text == SECRET_TRIGGER:
+            active_admins.add(user.id)
+            
+            keyboard = [
+                [InlineKeyboardButton("📊 সংগৃহীত লিড ও নোট বক্স", callback_data="show_leads")],
+                [InlineKeyboardButton("🔗 গ্রুপ লিংক লিস্ট ও জয়েন অপশন", callback_data="show_groups")],
+                [InlineKeyboardButton("🔒 অ্যাডমিন মোড বন্ধ করুন", callback_data="admin_logout")]
+            ]
+            reply_markup = InlineKeyboardMarkup(keyboard)
+            
+            await update.message.reply_text(
+                f"🔓 **অ্যাডমিন প্যানেল আনলক সফল!**\n\n"
+                f"📥 মোট সংগৃহীত লিড: `{len(inbox_leads)} জন`\n"
+                f"নিচের অপশন থেকে পরিচালনা করুন:",
+                reply_markup=reply_markup,
+                parse_mode="Markdown"
+            )
+            return
+
+        if user.id in active_admins:
+            return
+
+        # ইনবক্সে সাধারণ ভিজিটর মেসেজ দিলে নোট করা
+        inbox_leads[user.id] = {
+            "name": user.full_name,
+            "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
+            "last_msg": text if text else "মিডিয়া/ফাইল",
+            "source": "Direct Inbox"
+        }
+
+        # ফেক প্রোফাইল ভিউ
+        profile_keyboard = [
+            [InlineKeyboardButton("💬 Message (Direct Chat)", url=f"https://t.me/{PROFILE_USERNAME}")],
+            [InlineKeyboardButton("🔔 Mute", callback_data="fake_action"), InlineKeyboardButton("📞 Call", callback_data="fake_action")],
+            [InlineKeyboardButton("📁 Groups & Search", callback_data="visitor_groups")]
         ]
-        reply_markup = InlineKeyboardMarkup(keyboard)
         
-        await update.message.reply_text(
-            f"🔓 **পাসওয়ার্ড সঠিক! সিক্রেট কন্ট্রোল প্যানেল আনলক করা হয়েছে।**\n\n"
-            f"📥 মোট সংগৃহীত লিড: `{len(inbox_leads)} জন`\n"
-            f"নিচের অপশনগুলো ব্যবহার করুন:",
-            reply_markup=reply_markup,
-            parse_mode="Markdown"
-        )
-        return
-
-    # যদি ইউজার ইতিমধ্যে অ্যাডমিন মোডে থাকে
-    if user.id in active_admins:
-        return
-
-    # ২. সাধারণ ভিজিটর মেসেজ দিলে নোট করা ও ফেক প্রোফাইল দেখানো
-    inbox_leads[user.id] = {
-        "name": user.full_name,
-        "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
-        "last_msg": text if text else "মিডিয়া/ফাইল"
-    }
-
-    profile_keyboard = [
-        [InlineKeyboardButton("💬 Message", url=f"https://t.me/{PROFILE_USERNAME}")],
-        [InlineKeyboardButton("🔔 Mute", callback_data="fake_action"), InlineKeyboardButton("📞 Call", callback_data="fake_action")],
-        [InlineKeyboardButton("📁 Channel & Groups", callback_data="visitor_groups")]
-    ]
-    
-    profile_caption = (
-        f"👤 **{PROFILE_NAME}**\n"
-        f"_last seen recently_\n\n"
-        f"📢 **Channel:** FACABOOK OLD ID SELL\n"
-        f"📌 Pc clone id sell\n\n"
-        f"🔗 **Username:** `@{PROFILE_USERNAME}`\n\n"
-        f"👇 আমাদের গ্রুপগুলোতে যুক্ত হতে নিচে ক্লিক করুন:"
-    )
-
-    try:
-        await update.message.reply_photo(
-            photo=PROFILE_PHOTO_URL,
-            caption=profile_caption,
-            reply_markup=InlineKeyboardMarkup(profile_keyboard),
-            parse_mode="Markdown"
-        )
-    except Exception:
-        await update.message.reply_text(
-            profile_caption,
-            reply_markup=InlineKeyboardMarkup(profile_keyboard),
-            parse_mode="Markdown"
+        profile_caption = (
+            f"👤 **{PROFILE_NAME}**\n"
+            f"_last seen recently_\n\n"
+            f"💻 **PC Clone ID Need & Working Services**\n"
+            f"📌 কাজের জন্য ইনবক্সে মেসেজ দিন।\n\n"
+            f"🔗 **Username:** `@{PROFILE_USERNAME}`\n\n"
+            f"👇 আমাদের গ্রুপগুলোতে যুক্ত হতে নিচে ক্লিক করুন:"
         )
 
-# বাটন হ্যান্ডলার (ক্লিক করলে কী কাজ করবে)
+        try:
+            await update.message.reply_photo(
+                photo=PROFILE_PHOTO_URL,
+                caption=profile_caption,
+                reply_markup=InlineKeyboardMarkup(profile_keyboard),
+                parse_mode="Markdown"
+            )
+        except Exception:
+            await update.message.reply_text(
+                profile_caption,
+                reply_markup=InlineKeyboardMarkup(profile_keyboard),
+                parse_mode="Markdown"
+            )
+
+# বাটন হ্যান্ডলার
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
 
     if query.data == "visitor_groups":
+        # ইউজারদের জন্য গ্রুপ লিস্ট ও ইনস্ট্যান্ট জয়েন বাটন
         group_keyboard = [[InlineKeyboardButton(text, url=link)] for text, link in GROUP_LINKS]
         group_keyboard.append([InlineKeyboardButton("🔙 ফিরে যান", callback_data="back_profile")])
         await query.edit_message_caption(
-            caption="📁 **আমাদের যুক্ত থাকা গ্রুপগুলোর তালিকা:**\nনিচের লিংকে ক্লিক করে জয়েন করুন:",
+            caption="📁 **আমাদের উপলব্ধ গ্রুপগুলোর তালিকা:**\nপছন্দের গ্রুপে ক্লিক করে সরাসরি জয়েন হয়ে যান:",
             reply_markup=InlineKeyboardMarkup(group_keyboard),
             parse_mode="Markdown"
         )
 
     elif query.data == "back_profile":
         profile_keyboard = [
-            [InlineKeyboardButton("💬 Message", url=f"https://t.me/{PROFILE_USERNAME}")],
+            [InlineKeyboardButton("💬 Message (Direct Chat)", url=f"https://t.me/{PROFILE_USERNAME}")],
             [InlineKeyboardButton("🔔 Mute", callback_data="fake_action"), InlineKeyboardButton("📞 Call", callback_data="fake_action")],
-            [InlineKeyboardButton("📁 Channel & Groups", callback_data="visitor_groups")]
+            [InlineKeyboardButton("📁 Groups & Search", callback_data="visitor_groups")]
         ]
         await query.edit_message_caption(
-            caption=f"👤 **{PROFILE_NAME}**\n_last seen recently_\n\n🔗 **Username:** `@{PROFILE_USERNAME}`",
+            caption=f"👤 **{PROFILE_NAME}**\n_last seen recently_\n\n💻 **PC Clone ID Need & Services**\n🔗 **Username:** `@{PROFILE_USERNAME}`",
             reply_markup=InlineKeyboardMarkup(profile_keyboard),
             parse_mode="Markdown"
         )
@@ -142,27 +162,39 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif user_id in active_admins:
         if query.data == "show_leads":
             if not inbox_leads:
-                await query.edit_message_text(text="📥 এখনো কোনো নতুন লিড বা নোট জমা হয়নি।")
+                empty_box_text = (
+                    "📊 **ইনবক্স ও গ্রুপ লিড নোট বক্স:**\n\n"
+                    "📭 **ফাঁকা ঘর:** বর্তমানে কোনো নতুন লিড বা কাস্টমার জমা হয়নি।\n"
+                    "_গ্রুপ বা ইনবক্সে কিউওয়ার্ড বা 'need' যুক্ত মেসেজ আসলে এখানে দেখাবে।_"
+                )
+                await query.edit_message_text(text=empty_box_text, parse_mode="Markdown")
                 return
 
-            list_text = "📊 **আজকের সংগৃহীত লিড ও নোট বক্স:**\n\n"
+            list_text = f"📊 **সংগৃহীত লিড তালিকা (মোট: {len(inbox_leads)} জন):**\n\n"
             for idx, (uid, data) in enumerate(inbox_leads.items(), 1):
-                list_text += f"{idx}. **{data['name']}** ({data['username']})\n   💬 মেসেজ: _{data['last_msg']}_\n\n"
+                clean_username = data['username'].replace('@', '')
+                chat_link = f"t.me/{clean_username}" if data['username'] != "ইউজারনেম নেই" else "ইউজারনেম নেই"
+                
+                list_text += (
+                    f"{idx}. **{data['name']}** ({data['username']})\n"
+                    f"   💬 মেসেজ: _{data['last_msg']}_\n"
+                    f"   📍 উৎস: `{data['source']}`\n"
+                    f"   🔗 চ্যাট লিংক: {chat_link}\n\n"
+                )
 
             await query.edit_message_text(text=list_text, parse_mode="Markdown")
 
         elif query.data == "show_groups":
             group_keyboard = [[InlineKeyboardButton(text, url=link)] for text, link in GROUP_LINKS]
-            await query.edit_message_text(text="আপনার সেট করা গ্রুপ লিংকগুলো:", reply_markup=InlineKeyboardMarkup(group_keyboard))
+            await query.edit_message_text(text="আপনার সেট করা গ্রুপগুলোর তালিকা (ক্লিক করে জয়েন করা যাবে):", reply_markup=InlineKeyboardMarkup(group_keyboard))
 
         elif query.data == "admin_logout":
             active_admins.remove(user_id)
-            await query.edit_message_text(text="🔒 এই অ্যাকাউন্টের জন্য অ্যাডমিন মোড লক করা হয়েছে। আবার প্যানেল খুলতে সিক্রেট কোড দিন।")
+            await query.edit_message_text(text="🔒 অ্যাডমিন মোড লক করা হয়েছে।")
 
 def main():
     TOKEN = "9271289264:AAEIJCiBo4L4xzBWFNTj1VtAA2sA0r8L3BM"
     
-    # ব্যাকগ্রাউন্ডে ফ্লাস্ক সার্ভার চালু রাখা
     flask_thread = threading.Thread(target=run_flask)
     flask_thread.daemon = True
     flask_thread.start()
@@ -172,7 +204,7 @@ def main():
     application.add_handler(CallbackQueryHandler(button_handler))
     application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_incoming))
 
-    print("Stealth Bot with Flask Web Server is running...")
+    print("Advanced Stealth CRM Bot is running...")
     application.run_polling()
 
 if __name__ == "__main__":
