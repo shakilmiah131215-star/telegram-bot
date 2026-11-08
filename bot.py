@@ -1,76 +1,175 @@
 import logging
+import os
+import threading
+from flask import Flask
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import ApplicationBuilder, CallbackQueryHandler, CommandHandler, ContextTypes, MessageHandler, filters
 
 # লগিং কনফিগারেশন
 logging.basicConfig(format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO)
 
-# বটের বর্তমান স্ট্যাটাস ও মোড ট্র্যাক করার ভেরিয়েবল
-bot_status = {"active": False, "mode": "busy"}
+# 🔑 আপনার নির্দিষ্ট সিক্রেট মাস্টার পাসওয়ার্ড
+SECRET_TRIGGER = "#admin_unlock_99"
 
-# /start কমান্ডে একটি ইন্টারঅ্যাকティブ প্যানেল পাঠানো
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🔴 বট চালু করুন", callback_data="activate")],
-        [InlineKeyboardButton("🟢 ব্যাস্ত মোড (Busy)", callback_data="mode_busy")],
-        [InlineKeyboardButton("🔵 ঘুম মোড (Sleep)", callback_data="mode_sleep")],
+# 👤 আপনার ফেক প্রোফাইলের তথ্য
+PROFILE_NAME = "Eafat Khan"
+PROFILE_USERNAME = "millions_b"
+PROFILE_PHOTO_URL = "https://i.imgur.com/YourProfilePic.jpg"
+
+active_admins = set()
+inbox_leads = {}
+
+GROUP_LINKS = [
+    ("🦋 BOOST THE LION 🦁", "https://t.me/your_group_1"),
+    ("A.S.M.R WORKING", "https://t.me/your_group_2"),
+    ("Facebook Update Method", "https://t.me/your_group_3")
+]
+
+# --- ছোট ফ্লাস্ক সার্ভার (রেন্ডারের Web Service "Timed Out" সমস্যা সমাধানের জন্য) ---
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    return "Stealth Bot is Active & Running!"
+
+def run_flask():
+    port = int(os.environ.get("PORT", 10000))
+    app.run(host="0.0.0.0", port=port)
+
+# টেলিগ্রাম মেসেজ হ্যান্ডলার
+async def handle_incoming(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.from_user:
+        return
+
+    user = update.message.from_user
+    chat_type = update.message.chat.type
+    text = update.message.text.strip() if update.message.text else ""
+
+    if chat_type != "private":
+        return
+
+    # সঠিক সিক্রেট কোড দিলে অ্যাডমিন প্যানেল ওপেন হবে
+    if text == SECRET_TRIGGER:
+        active_admins.add(user.id)
+        
+        keyboard = [
+            [InlineKeyboardButton("📊 ইনবক্স লিড ও নোট বক্স", callback_data="show_leads")],
+            [InlineKeyboardButton("🔗 গ্রুপ লিংক ম্যানেজমেন্ট", callback_data="show_groups")],
+            [InlineKeyboardButton("🔒 অ্যাডমিন মোড বন্ধ করুন (Lock)", callback_data="admin_logout")]
+        ]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            f"🔓 **পাসওয়ার্ড সঠিক! সিক্রেট কন্ট্রোল প্যানেল আনলক করা হয়েছে।**\n\n"
+            f"📥 মোট সংগৃহীত লিড: `{len(inbox_leads)} জন`\n"
+            f"আপনি এখন এই অ্যাকাউন্ট থেকে বট নিয়ন্ত্রণ করতে পারবেন:",
+            reply_markup=reply_markup,
+            parse_mode="Markdown"
+        )
+        return
+
+    if user.id in active_admins:
+        return
+
+    # সাধারণ ভিজিটর মেসেজ দিলে নোট করা ও প্রোফাইল দেখানো
+    inbox_leads[user.id] = {
+        "name": user.full_name,
+        "username": f"@{user.username}" if user.username else "ইউজারনেম নেই",
+        "last_msg": text if text else "মিডিয়া/ফাইল"
+    }
+
+    profile_keyboard = [
+        [InlineKeyboardButton("💬 Message", url=f"https://t.me/{PROFILE_USERNAME}")],
+        [InlineKeyboardButton("🔔 Mute", callback_data="fake_action"), InlineKeyboardButton("📞 Call", callback_data="fake_action")],
+        [InlineKeyboardButton("📁 Channel & Groups", callback_data="visitor_groups")]
     ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
-
-    status_text = "বন্ধ আছে ❌"
-    if bot_status["active"]:
-        current_mode = "ব্যস্তকালীন সময় 🔴" if bot_status["mode"] == "busy" else "ঘুমের সময় 🔵"
-        status_text = f"চালু আছে ✅ ({current_mode})"
-
-    await update.message.reply_text(
-        f"🤖 **অটো-রিপ্লাই কন্ট্রোল প্যানেল**\nবর্তমান অবস্থা: {status_text}\n\nনিচের বোতামগুলো থেকে যেকোনো একটি অপشن নির্বাচন করুন:",
-        reply_markup=reply_markup,
-        parse_mode="Markdown"
+    
+    profile_caption = (
+        f"👤 **{PROFILE_NAME}**\n"
+        f"_last seen recently_\n\n"
+        f"📢 **Channel:** FACABOOK OLD ID SELL\n"
+        f"📌 Pc clone id sell\n\n"
+        f"🔗 **Username:** `@{PROFILE_USERNAME}`\n\n"
+        f"👇 গ্রুপগুলোতে যুক্ত হতে নিচে ক্লিক করুন:"
     )
 
-# বটন ক্লিক করলে কাজ পরিচালনা করার হ্যান্ডলার
+    try:
+        await update.message.reply_photo(
+            photo=PROFILE_PHOTO_URL,
+            caption=profile_caption,
+            reply_markup=InlineKeyboardMarkup(profile_keyboard),
+            parse_mode="Markdown"
+        )
+    except Exception:
+        await update.message.reply_text(
+            profile_caption,
+            reply_markup=InlineKeyboardMarkup(profile_keyboard),
+            parse_mode="Markdown"
+        )
+
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
+    user_id = query.from_user.id
 
-    if query.data == "activate":
-        bot_status["active"] = False
-        await query.edit_message_text(text="❌ বটটি-ডিঅ্যাক্টিভ (Deactivated) করা হয়েছে!")
+    if query.data == "visitor_groups":
+        group_keyboard = [[InlineKeyboardButton(text, url=link)] for text, link in GROUP_LINKS]
+        group_keyboard.append([InlineKeyboardButton("🔙 ফিরে যান", callback_data="back_profile")])
+        await query.edit_message_caption(
+            caption="📁 **আমাদের যুক্ত থাকা গ্রুপগুলোর তালিকা:**\nনিচের লিংকে ক্লিক করে জয়েন করুন:",
+            reply_markup=InlineKeyboardMarkup(group_keyboard),
+            parse_mode="Markdown"
+        )
 
-    elif query.data == "mode_busy":
-        bot_status["active"] = True
-        bot_status["mode"] = "busy"
-        await query.edit_message_text(text="✅ অ্যাক্টিভ করা হয়েছে!\n\nবটের মোড: **'ব্যস্তকালীন সময়ে তে আছি'** পরে কথা বলব।", parse_mode="Markdown")
+    elif query.data == "back_profile":
+        profile_keyboard = [
+            [InlineKeyboardButton("💬 Message", url=f"https://t.me/{PROFILE_USERNAME}")],
+            [InlineKeyboardButton("🔔 Mute", callback_data="fake_action"), InlineKeyboardButton("📞 Call", callback_data="fake_action")],
+            [InlineKeyboardButton("📁 Channel & Groups", callback_data="visitor_groups")]
+        ]
+        await query.edit_message_caption(
+            caption=f"👤 **{PROFILE_NAME}**\n_last seen recently_\n\n🔗 **Username:** `@{PROFILE_USERNAME}`",
+            reply_markup=InlineKeyboardMarkup(profile_keyboard),
+            parse_mode="Markdown"
+        )
 
-    elif query.data == "mode_sleep":
-        bot_status["active"] = True
-        bot_status["mode"] = "sleep"
-        await query.edit_message_text(text="✅ অ্যাক্টিভ করা হয়েছে!\n\nবটের মোড: **'আমি এখন ঘুমচ্ছি ঘুম থেকে উঠে আপনার সাথে যোগাযোগ করব'**।", parse_mode="Markdown")
+    elif query.data == "fake_action":
+        await query.answer("এটি একটি পার্সোনাল প্রোফাইল ভিউ!", show_alert=False)
 
-# কেউ মেসেজ দিলে অটো-রিপ্লাই পাঠানোর হ্যান্ডলার
-async def auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if bot_status["active"] and update.message and update.message.chat.type == "private":
-        if bot_status["mode"] == "busy":
-            reply_text = "আমি এখন ব্যস্ত আছি পরে কথা বলব।"
-        else:
-            reply_text = "আমি এখন ঘুমচ্ছি ঘুম থেকে উঠে আপনার সাথে যোগাযোগ করব।"
-        
-        await update.message.reply_text(reply_text)
+    elif user_id in active_admins:
+        if query.data == "show_leads":
+            if not inbox_leads:
+                await query.edit_message_text(text="📥 এখনো কোনো নতুন লিড বা নোট জমা হয়নি।")
+                return
+
+            list_text = "📊 **আজকের সংগৃহীত লিড ও নোট বক্স:**\n\n"
+            for idx, (uid, data) in enumerate(inbox_leads.items(), 1):
+                list_text += f"{idx}. **{data['name']}** ({data['username']})\n   💬 মেসেজ: _{data['last_msg']}_\n\n"
+
+            await query.edit_message_text(text=list_text, parse_mode="Markdown")
+
+        elif query.data == "show_groups":
+            group_keyboard = [[InlineKeyboardButton(text, url=link)] for text, link in GROUP_LINKS]
+            await query.edit_message_text(text="আপনার সেট করা গ্রুপ লিংকগুলো:", reply_markup=InlineKeyboardMarkup(group_keyboard))
+
+        elif query.data == "admin_logout":
+            active_admins.remove(user_id)
+            await query.edit_message_text(text="🔒 এই অ্যাকাউন্টের জন্য অ্যাডমিন মোড লক করা হয়েছে।")
 
 def main():
-    # আপনার টেলিগ্রাম বট টোকেন
     TOKEN = "9271289264:AAEIJCiBo4L4xzBWFNTj1VtAA2sA0r8L3BM"
+    
+    # ব্যাকগ্রাউন্ডে ফ্লাস্ক সার্ভার রান করা যাতে রেন্ডার ওয়েব সার্ভিস টাইমআউট না হয়
+    flask_thread = threading.Thread(target=run_flask)
+    flask_thread.daemon = True
+    flask_thread.start()
 
     application = ApplicationBuilder().token(TOKEN).build()
 
-    # হ্যান্ডলারগুলো রেজিস্টার করা
-    application.add_handler(CommandHandler("start", start))
     application.add_handler(CallbackQueryHandler(button_handler))
-    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), auto_reply))
+    application.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_incoming))
 
-    print("Bot is running...")
-    
-    # Render-এর ইভেন্ট লুপের সমস্যা সমাধানের জন্য সঠিক উপায়ে রানিং
+    print("Stealth Bot with Flask Web Server is running...")
     application.run_polling()
 
 if __name__ == "__main__":
